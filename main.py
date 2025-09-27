@@ -93,6 +93,7 @@ def timer_loop(vertical, goal, start_time):
     import tty
     import select
     seconds = 0
+    AUTO_END_SECONDS = 20 * 60  # 20 minutes
     start_line = f"{start_time} [ {vertical} ] : Start logging Goal: {goal}"
     write_log(vertical, start_line)
     print(f"\rLogOn: Task [ {vertical} ] 00:00:00\033[K", end='', flush=True)
@@ -108,6 +109,12 @@ def timer_loop(vertical, goal, start_time):
             # Log in progress every 5 seconds
             if seconds != 0 and seconds % 5 == 0:
                 write_log(vertical, f"[LogOn - {time_str}] in progress")
+            # Auto end after 20 minutes
+            if seconds >= AUTO_END_SECONDS:
+                write_log(vertical, f"[LogOn - {time_str}] auto-closed after 20 minutes")
+                print(f"\n[cyan]Session auto-closed at {time_str} (20 minutes reached).[/]")
+                beep()
+                break
             # Non-blocking key check
             dr, _, _ = select.select([sys.stdin], [], [], 1)
             if dr:
@@ -118,7 +125,9 @@ def timer_loop(vertical, goal, start_time):
                     break
                 elif ch == 'h':
                     print("\n[cyan]Hold: Add a note (type 'exit' on a new line to finish):[/]")
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # Restore normal mode
                     note = multiline_input('>')
+                    tty.setcbreak(fd)  # Set back to cbreak mode
                     write_log(vertical, f"[LogOn - {time_str}] NOTE: {note}")
             seconds += 1
     except KeyboardInterrupt:
