@@ -1,0 +1,30 @@
+03:10 Sun 28 Sep 2025 [ LogOn ] : Start logging Goal: test-3 lets check now the result
+03:21 Sun 28 Sep 2025 [ LogOn ] : Start logging Goal: testing this for now
+[LogOn - 00:00:19] NOTE: cool holding for now
+[LogOn - 00:00:31] NOTE: 
+its looing readlly cool
+[LogOn - 00:00:42] NOTE: hq
+q
+[LogOn - 00:00:49] closed
+03:25 Sun 28 Sep 2025 [ LogOn ] : Start logging Goal: test 1
+[LogOn - 00:00:05] in progress
+[LogOn - 00:00:06] closed
+03:25 Sun 28 Sep 2025 [ LogOn ] : Start logging Goal: test 2 here
+[LogOn - 00:00:05] in progress
+[LogOn - 00:00:10] in progress
+[LogOn - 00:00:15] in progress
+[LogOn - 00:00:20] in progress
+[LogOn - 00:00:25] in progress
+[LogOn - 00:00:30] in progress
+[LogOn - 00:00:35] in progress
+[LogOn - 00:00:40] in progress
+[LogOn - 00:00:45] in progress
+[LogOn - 00:00:50] in progress
+[LogOn - 00:00:55] in progress
+[LogOn - 00:01:00] in progress
+[LogOn - 00:01:05] in progress
+[LogOn - 00:01:10] in progress
+[LogOn - 00:01:15] in progress
+[LogOn - 00:01:20] in progress
+[LogOn - 00:01:25] in progress
+[LogOn - 00:01:26] closed
