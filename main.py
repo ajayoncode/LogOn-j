@@ -15,6 +15,7 @@ import select
 
 VERTICALS_FILE = 'verticals.json'
 LOGGER_DIR = 'logger_data'
+AUTO_END_SECONDS = 20*60  # 20 minutes
 
 console = Console()
 
@@ -67,6 +68,19 @@ def multiline_input(prompt):
 def beep():
     print('\a', end='', flush=True)
 
+def play_mp3(path):
+    try:
+        import pygame
+        pygame.mixer.init()
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.play()
+        # Wait for the music to finish
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+        pygame.mixer.quit()
+    except Exception as e:
+        print(f"[ERROR] Could not play mp3: {e}")
+
 def log_file_path(vertical):
     safe_name = vertical.replace('/', '_').replace(' ', '_')
     return os.path.join(LOGGER_DIR, f"{safe_name}.txt")
@@ -74,8 +88,21 @@ def log_file_path(vertical):
 def write_log(vertical, line):
     ensure_logger_dir()
     path = log_file_path(vertical)
-    with open(path, 'a') as f:
-        f.write(line + '\n')
+    # If 'in progress', replace previous 'in progress' line for this vertical
+    if 'in progress' in line:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                lines = f.readlines()
+            # Remove previous 'in progress' lines
+            lines = [l for l in lines if 'in progress' not in l]
+        else:
+            lines = []
+        lines.append(line + '\n')
+        with open(path, 'w') as f:
+            f.writelines(lines)
+    else:
+        with open(path, 'a') as f:
+            f.write(line + '\n')
 
 def getch():
     fd = sys.stdin.fileno()
@@ -88,12 +115,7 @@ def getch():
     return ch
 
 def timer_loop(vertical, goal, start_time):
-    import sys
-    import termios
-    import tty
-    import select
     seconds = 0
-    AUTO_END_SECONDS = 20 * 60  # 20 minutes
     start_line = f"{start_time} [ {vertical} ] : Start logging Goal: {goal}"
     write_log(vertical, start_line)
     print(f"\rLogOn: Task [ {vertical} ] 00:00:00\033[K", end='', flush=True)
@@ -113,7 +135,7 @@ def timer_loop(vertical, goal, start_time):
             if seconds >= AUTO_END_SECONDS:
                 write_log(vertical, f"[LogOn - {time_str}] auto-closed after 20 minutes")
                 print(f"\n[cyan]Session auto-closed at {time_str} (20 minutes reached).[/]")
-                beep()
+                play_mp3("/home/ajay-dev/Documents/HangOn/LogOn/beep.mp3")
                 break
             # Non-blocking key check
             dr, _, _ = select.select([sys.stdin], [], [], 1)
