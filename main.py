@@ -115,32 +115,39 @@ def getch():
     return ch
 
 def timer_loop(vertical, goal, start_time):
-    seconds = 0
     start_line = f"{start_time} [ {vertical} ] : Start logging Goal: {goal}"
     write_log(vertical, start_line)
     print(f"\rLogOn: Task [ {vertical} ] 00:00:00\033[K", end='', flush=True)
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
+    start_ts = time.time()
+    last_logged_second = -1
     try:
         tty.setcbreak(fd)
         while True:
-            mins, secs = divmod(seconds, 60)
-            hours, mins = divmod(mins, 60)
-            time_str = f"{hours:02}:{mins:02}:{secs:02}"
-            print(f"\rLogOn: Task [ {vertical} ] {time_str}\033[K", end='', flush=True)
-            # Log in progress every 5 seconds
-            if seconds != 0 and seconds % 5 == 0:
-                write_log(vertical, f"[LogOn - {time_str}] in progress")
-            # Auto end after 20 minutes
-            if seconds >= AUTO_END_SECONDS:
-                write_log(vertical, f"[LogOn - {time_str}] auto-closed after 20 minutes")
-                print(f"\n[cyan]Session auto-closed at {time_str} (20 minutes reached).[/]")
-                play_mp3("/home/ajay-dev/Documents/HangOn/LogOn/beep.mp3")
-                break
+            elapsed = int(time.time() - start_ts)
+            if elapsed != last_logged_second:
+                mins, secs = divmod(elapsed, 60)
+                hours, mins = divmod(mins, 60)
+                time_str = f"{hours:02}:{mins:02}:{secs:02}"
+                print(f"\rLogOn: Task [ {vertical} ] {time_str}\033[K", end='', flush=True)
+                # Log in progress every 5 seconds
+                if elapsed != 0 and elapsed % 5 == 0:
+                    write_log(vertical, f"[LogOn - {time_str}] in progress")
+                # Auto end after 20 minutes
+                if elapsed >= AUTO_END_SECONDS:
+                    write_log(vertical, f"[LogOn - {time_str}] auto-closed after 20 minutes")
+                    print(f"\n[cyan]Session auto-closed at {time_str} (20 minutes reached).[/]")
+                    play_mp3("/home/ajay-dev/Documents/HangOn/LogOn/beep.mp3")
+                    break
+                last_logged_second = elapsed
             # Non-blocking key check
-            dr, _, _ = select.select([sys.stdin], [], [], 1)
+            dr, _, _ = select.select([sys.stdin], [], [], 0.1)
             if dr:
                 ch = sys.stdin.read(1)
+                mins, secs = divmod(elapsed, 60)
+                hours, mins = divmod(mins, 60)
+                time_str = f"{hours:02}:{mins:02}:{secs:02}"
                 if ch == 'q':
                     write_log(vertical, f"[LogOn - {time_str}] closed")
                     print(f"\n[cyan]Session closed at {time_str}.[/]")
@@ -148,12 +155,16 @@ def timer_loop(vertical, goal, start_time):
                 elif ch == 'h':
                     print("\n[cyan]Hold: Add a note (type 'exit' on a new line to finish):[/]")
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # Restore normal mode
+                    hold_start = time.time()
                     note = multiline_input('>')
+                    hold_end = time.time()
                     tty.setcbreak(fd)  # Set back to cbreak mode
+                    # Adjust start_ts forward by hold duration to pause timer
+                    start_ts += (hold_end - hold_start)
                     write_log(vertical, f"[LogOn - {time_str}] NOTE: {note}")
-            seconds += 1
     except KeyboardInterrupt:
-        mins, secs = divmod(seconds, 60)
+        elapsed = int(time.time() - start_ts)
+        mins, secs = divmod(elapsed, 60)
         hours, mins = divmod(mins, 60)
         time_str = f"{hours:02}:{mins:02}:{secs:02}"
         write_log(vertical, f"[LogOn - {time_str}] closed")
