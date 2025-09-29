@@ -1,0 +1,18 @@
+[Unit]
+Description=LogOn Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=ajay-dev
+Group=ajay-dev
+WorkingDirectory=/home/ajay-dev/Documents/HangOn/LogOn
+Environment=PATH=/home/ajay-dev/Documents/HangOn/LogOn/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ajay-dev/Documents/HangOn/LogOn/.venv/bin/streamlit run streamlit_app.py --server.port=6001 --server.address=0.0.0.0 --server.headless=true
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
