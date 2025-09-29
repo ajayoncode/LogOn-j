@@ -1,3 +1,5 @@
 questionary
 rich
 pygame
+streamlit
+pandas
