@@ -158,14 +158,20 @@ class SessionManager:
     
     def _resume_session(self, session_data: Dict):
         """Resume a previous session"""
+        # Parse stored ISO time and ensure it's timezone-aware
+        if session_data['start_time']:
+            start_time = datetime.fromisoformat(session_data['start_time'])
+            # If naive, localize to IST; if aware, convert to IST
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=ZoneInfo('Asia/Kolkata'))
+            else:
+                start_time = start_time.astimezone(ZoneInfo('Asia/Kolkata'))
+        else:
+            start_time = datetime.now(ZoneInfo('Asia/Kolkata'))
+            
         self.current_session = {
             'id': session_data['session_id'],
-            # Parse stored ISO time; if it's naive, assume Asia/Kolkata
-            'start_time': (
-                datetime.fromisoformat(session_data['start_time'])
-                if session_data['start_time']
-                else datetime.now(ZoneInfo('Asia/Kolkata'))
-            ) if isinstance(session_data['start_time'], str) else datetime.now(ZoneInfo('Asia/Kolkata')),
+            'start_time': start_time,
             'project': session_data['project'],
             'goal': session_data['goal'],
             'type': session_data['session_type'],
@@ -301,13 +307,16 @@ class SessionManager:
         """Get current session status for UI"""
         with self.session_lock:
             if self.current_session:
-                duration = datetime.now() - self.current_session['start_time']
+                # Ensure both times are timezone-aware for calculation
+                now = datetime.now(ZoneInfo('Asia/Kolkata'))
+                start_time = self.current_session['start_time']
+                duration = now - start_time
                 return {
                     'id': self.current_session['id'],
                     'project': self.current_session['project'],
                     'goal': self.current_session['goal'],
                     'type': self.current_session['type'],
-                    'start_time': self.current_session['start_time'].strftime('%H:%M:%S'),
+                    'start_time': start_time.strftime('%H:%M:%S'),
                     'duration_minutes': round(duration.total_seconds() / 60, 1),
                     'status': 'running'
                 }
