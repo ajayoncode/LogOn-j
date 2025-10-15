@@ -8,7 +8,10 @@ User=ajay-dev
 Group=ajay-dev
 WorkingDirectory=/home/ajay-dev/Documents/HangOn/LogOn
 Environment=PATH=/home/ajay-dev/Documents/HangOn/LogOn/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/ajay-dev/Documents/HangOn/LogOn/.venv/bin/streamlit run streamlit_app.py --server.port=6001 --server.address=0.0.0.0 --server.headless=true
+Environment=STREAMLIT_SERVER_PORT=6001
+Environment=STREAMLIT_SERVER_ADDRESS=0.0.0.0
+Environment=STREAMLIT_HEADLESS=true
+ExecStart=/home/ajay-dev/Documents/HangOn/LogOn/.venv/bin/python /home/ajay-dev/Documents/HangOn/LogOn/launcher.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

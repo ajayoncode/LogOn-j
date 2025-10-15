@@ -5,6 +5,7 @@ import threading
 import subprocess
 import csv
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import signal
@@ -159,7 +160,12 @@ class SessionManager:
         """Resume a previous session"""
         self.current_session = {
             'id': session_data['session_id'],
-            'start_time': datetime.fromisoformat(session_data['start_time']),
+            # Parse stored ISO time; if it's naive, assume Asia/Kolkata
+            'start_time': (
+                datetime.fromisoformat(session_data['start_time'])
+                if session_data['start_time']
+                else datetime.now(ZoneInfo('Asia/Kolkata'))
+            ) if isinstance(session_data['start_time'], str) else datetime.now(ZoneInfo('Asia/Kolkata')),
             'project': session_data['project'],
             'goal': session_data['goal'],
             'type': session_data['session_type'],
@@ -190,7 +196,8 @@ class SessionManager:
     def _start_session(self, project: str, goal: str, session_type: str) -> bool:
         """Start a new session"""
         session_id = self._generate_session_id()
-        start_time = datetime.now()
+        # Use timezone-aware IST timestamps
+        start_time = datetime.now(ZoneInfo('Asia/Kolkata'))
         
         self.current_session = {
             'id': session_id,
@@ -238,7 +245,7 @@ class SessionManager:
             self.current_session['timeout_thread'].cancel()
         
         # Calculate duration
-        end_time = datetime.now()
+        end_time = datetime.now(ZoneInfo('Asia/Kolkata'))
         duration = end_time - self.current_session['start_time']
         duration_minutes = duration.total_seconds() / 60
         
@@ -313,9 +320,15 @@ class SessionManager:
         try:
             with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                # Enforce seconds-only ISO format (no microseconds)
-                start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(start_time, datetime) else str(start_time)
-                end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(end_time, datetime) else ('')
+                # Enforce ISO format with timezone info in seconds precision
+                start_str = (
+                    start_time.replace(microsecond=0).isoformat()
+                    if isinstance(start_time, datetime) else str(start_time)
+                )
+                end_str = (
+                    end_time.replace(microsecond=0).isoformat()
+                    if isinstance(end_time, datetime) and end_time is not None else ''
+                )
                 writer.writerow([
                     session_id,
                     start_str,
@@ -345,8 +358,8 @@ class SessionManager:
                 if i == 0:  # Skip header
                     continue
                 if row[0] == session_id:  # session_id is first column
-                    # Enforce seconds-only ISO format (no microseconds)
-                    rows[i][2] = end_time.strftime('%Y-%m-%dT%H:%M:%S')  # end_time
+                    # Enforce ISO format with timezone info in seconds precision
+                    rows[i][2] = end_time.replace(microsecond=0).isoformat()  # end_time
                     rows[i][3] = round(duration_minutes, 2)  # duration_minutes
                     rows[i][7] = status  # status
                     rows[i][8] = auto_closed  # auto_closed

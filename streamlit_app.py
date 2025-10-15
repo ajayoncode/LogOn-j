@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import re
 from pathlib import Path
 from session_manager import session_manager
@@ -154,8 +155,8 @@ def create_daily_hours_graph(df):
     if 'duration_minutes' in raw_df.columns:
         raw_df['duration_minutes'] = pd.to_numeric(raw_df['duration_minutes'], errors='coerce')
     
-    # Group by date and sum duration in hours
-    daily_data = raw_df.groupby(raw_df['start_time'].dt.date)['duration_minutes'].sum() / 60
+    # Group by IST date and sum duration in hours
+    daily_data = raw_df.groupby(raw_df['start_time'].dt.tz_convert('Asia/Kolkata').dt.date)['duration_minutes'].sum() / 60
     daily_data = daily_data.reset_index()
     daily_data.columns = ['date', 'total_hours']
     
@@ -184,6 +185,16 @@ def create_daily_hours_graph(df):
         name='Daily Hours',
         hovertemplate='<b>%{x}</b><br>Total Hours: %{y:.2f}<extra></extra>'
     ))
+
+    # Add average horizontal line
+    if len(daily_data) > 0:
+        avg_hours = daily_data['total_hours'].mean()
+        fig.add_hline(
+            y=avg_hours,
+            line=dict(color='rgba(31, 119, 180, 0.4)', width=2, dash='dash'),
+            annotation_text=f"Avg: {avg_hours:.2f}h",
+            annotation_position="top left"
+        )
     
     # Update layout
     fig.update_layout(
@@ -228,13 +239,21 @@ def load_session_data_from_csv():
         if df.empty:
             return df
         
-        # Convert datetime columns - handle both formats (with and without microseconds)
+        # Convert datetime columns - robust to timezone-aware or naive strings
         if 'start_time' in df.columns:
-            df['start_time'] = pd.to_datetime(df['start_time'], errors='coerce', utc=True).dt.tz_convert('Asia/Kolkata')
+            start_parsed = pd.to_datetime(df['start_time'], errors='coerce')
+            if start_parsed.dt.tz is None:
+                df['start_time'] = start_parsed.dt.tz_localize('Asia/Kolkata')
+            else:
+                df['start_time'] = start_parsed.dt.tz_convert('Asia/Kolkata')
         if 'end_time' in df.columns:
             # Handle empty end_time values for in_progress sessions
-            df['end_time'] = pd.to_datetime(df['end_time'], errors='coerce', utc=True).dt.tz_convert('Asia/Kolkata')
-            print(df['end_time'])
+            end_parsed = pd.to_datetime(df['end_time'], errors='coerce')
+            if end_parsed.notna().any():
+                if end_parsed.dt.tz is None:
+                    df['end_time'] = end_parsed.dt.tz_localize('Asia/Kolkata')
+                else:
+                    df['end_time'] = end_parsed.dt.tz_convert('Asia/Kolkata')
         # Convert duration_minutes to numeric, handling any string values
         if 'duration_minutes' in df.columns:
             df['duration_minutes'] = pd.to_numeric(df['duration_minutes'], errors='coerce')
@@ -285,7 +304,13 @@ def main():
         # Use the loaded dataframe directly (it now contains both original and display columns)
         raw_df = df.copy()
         if 'start_time' in raw_df.columns:
-            raw_df['start_time'] = pd.to_datetime(raw_df['start_time'], errors='coerce', utc=True).dt.tz_convert('Asia/Kolkata')
+            # Parse any stored timezone info; if naive, localize to IST
+            parsed = pd.to_datetime(raw_df['start_time'], errors='coerce')
+            # If timezone-naive, assign IST; otherwise convert to IST
+            if parsed.dt.tz is None:
+                raw_df['start_time'] = parsed.dt.tz_localize('Asia/Kolkata')
+            else:
+                raw_df['start_time'] = parsed.dt.tz_convert('Asia/Kolkata')
         if 'duration_minutes' in raw_df.columns:
             raw_df['duration_minutes'] = pd.to_numeric(raw_df['duration_minutes'], errors='coerce')
         
