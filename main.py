@@ -15,7 +15,7 @@ import select
 
 VERTICALS_FILE = 'verticals.json'
 LOGGER_DIR = 'logger_data'
-AUTO_END_SECONDS = 40*60  # 20 minutes
+AUTO_END_SECONDS = 20*60  # 20 minutes
 
 console = Console()
 

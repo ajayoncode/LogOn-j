@@ -3,3 +3,4 @@ rich
 pygame
 streamlit
 pandas
+plotly
