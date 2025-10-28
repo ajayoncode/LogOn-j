@@ -18,8 +18,7 @@ class SessionManager:
         base_dir = Path(__file__).parent.resolve()
         self.csv_file = str((base_dir / "logger_data" / "sessions.csv").resolve())
         self.verticals_file = str((base_dir / "verticals.json").resolve())
-        self.auto_session_project = "systemOn"
-        self.auto_session_goal = "auto start sessess"
+        # Auto session removed; manual sessions only
         self.manual_timeout = 20 * 60  # 20 minutes
         self.running = False
         self.screen_monitor_thread = None
@@ -120,25 +119,12 @@ class SessionManager:
                 time.sleep(5)
     
     def _on_screen_locked(self):
-        """Handle screen lock event"""
-        with self.session_lock:
-            if self.current_session:
-                self._end_current_session("Screen locked")
-                print("Screen locked - session ended")
+        """Screen lock handling disabled"""
+        return
     
     def _on_screen_unlocked(self):
-        """Handle screen unlock event"""
-        with self.session_lock:
-            if not self.current_session:
-                # Check if we should resume a previous session
-                previous_session = self._get_last_incomplete_session()
-                if previous_session:
-                    self._resume_session(previous_session)
-                    print("Screen unlocked - previous session resumed")
-                else:
-                    # Start auto session
-                    self._start_auto_session()
-                    print("Screen unlocked - auto session started")
+        """Handle screen unlock event (auto sessions disabled)"""
+        return
     
     def _get_last_incomplete_session(self) -> Optional[Dict]:
         """Get the last incomplete session from CSV"""
@@ -182,20 +168,14 @@ class SessionManager:
         if session_data['session_type'] == 'manual':
             self._start_manual_timeout()
     
-    def _start_auto_session(self):
-        """Start automatic session with systemOn project"""
-        self._start_session(self.auto_session_project, self.auto_session_goal, 'auto')
+    # Auto session capability removed
     
     def start_manual_session(self, project: str, goal: str) -> bool:
         """Start manual session (called from Streamlit UI)"""
         with self.session_lock:
             if self.current_session:
-                if self.current_session['type'] == 'auto':
-                    # End auto session and start manual
-                    self._end_current_session("Manual session started")
-                else:
-                    # Already have manual session
-                    return False
+                # Already have a session running; do not start another
+                return False
             
             return self._start_session(project, goal, 'manual')
     
@@ -203,15 +183,18 @@ class SessionManager:
         """Start a new session"""
         session_id = self._generate_session_id()
         # Use timezone-aware IST timestamps
-        start_time = datetime.now(ZoneInfo('Asia/Kolkata'))
+        start_time = datetime.now()
         
         self.current_session = {
             'id': session_id,
-            'start_time': start_time,
+            'start_time': datetime.now(ZoneInfo('Asia/Kolkata')),
             'project': project,
             'goal': goal,
             'type': session_type,
-            'timeout_thread': None
+            'timeout_thread': None,
+            'paused': False,
+            'paused_start': None,
+            'total_paused_duration': timedelta(0)  # Track total time paused
         }
         
         # Write to CSV
@@ -237,9 +220,6 @@ class SessionManager:
         with self.session_lock:
             if self.current_session and self.current_session['type'] == 'manual':
                 self._end_current_session("Manual session timeout (20 minutes)")
-                # Start auto session after manual timeout
-                self._start_auto_session()
-                print("Manual session ended after 20 minutes - auto session started")
     
     def _end_current_session(self, reason: str = "Manual stop"):
         """End the current session"""
@@ -250,15 +230,23 @@ class SessionManager:
         if self.current_session['timeout_thread']:
             self.current_session['timeout_thread'].cancel()
         
-        # Calculate duration
+        # Calculate duration excluding paused time
+        test=datetime.now()
         end_time = datetime.now(ZoneInfo('Asia/Kolkata'))
-        duration = end_time - self.current_session['start_time']
-        duration_minutes = duration.total_seconds() / 60
+        total_duration = end_time - self.current_session['start_time']
+        paused_total = self.current_session.get('total_paused_duration', timedelta(0))
+        # If currently paused, include the ongoing paused period
+        if self.current_session.get('paused') and self.current_session.get('paused_start'):
+            paused_total += (end_time - self.current_session['paused_start'])
+        active_duration = total_duration - paused_total
+        if active_duration.total_seconds() < 0:
+            active_duration = timedelta(0)
+        duration_minutes = active_duration.total_seconds() / 60
         
         # Update CSV
         self._update_session_in_csv(
             self.current_session['id'],
-            end_time,
+            test,
             duration_minutes,
             'closed',
             reason == "Manual session timeout (20 minutes)"
@@ -266,32 +254,49 @@ class SessionManager:
         
         self.current_session = None
     
+    def pause_session(self) -> bool:
+        """Pause current session"""
+        with self.session_lock:
+            if self.current_session and not self.current_session['paused']:
+                self.current_session['paused'] = True
+                self.current_session['paused_start'] = datetime.now(ZoneInfo('Asia/Kolkata'))
+                # Cancel timeout when paused
+                if self.current_session['timeout_thread']:
+                    self.current_session['timeout_thread'].cancel()
+                return True
+            return False
+    
+    def resume_session(self) -> bool:
+        """Resume paused session"""
+        with self.session_lock:
+            if self.current_session and self.current_session['paused']:
+                # Calculate paused duration and add to total
+                if self.current_session['paused_start']:
+                    pause_end = datetime.now(ZoneInfo('Asia/Kolkata'))
+                    paused_duration = pause_end - self.current_session['paused_start']
+                    self.current_session['total_paused_duration'] += paused_duration
+                
+                self.current_session['paused'] = False
+                self.current_session['paused_start'] = None
+                
+                # Restart timeout for manual sessions
+                if self.current_session['type'] == 'manual':
+                    self._start_manual_timeout()
+                
+                return True
+            return False
+    
     def stop_current_session(self) -> bool:
         """Stop current session (called from Streamlit UI)"""
         with self.session_lock:
             if self.current_session:
-                session_type = self.current_session['type']
                 self._end_current_session("Manual stop")
-                
-                # If stopping auto session, don't start another one automatically
-                if session_type == 'auto':
-                    print("Auto session stopped manually")
-                    return True
-                else:
-                    # If stopping manual session, start auto session
-                    self._start_auto_session()
-                    print("Manual session stopped - auto session started")
-                    return True
+                return True
             return False
     
     def stop_auto_session(self) -> bool:
-        """Stop only auto session (called from Streamlit UI)"""
-        with self.session_lock:
-            if self.current_session and self.current_session['type'] == 'auto':
-                self._end_current_session("Auto session stopped manually")
-                print("Auto session stopped manually")
-                return True
-            return False
+        """Auto sessions disabled"""
+        return False
     
     def stop_all_sessions(self):
         """Stop all sessions and cleanup"""
@@ -310,14 +315,25 @@ class SessionManager:
                 # Ensure both times are timezone-aware for calculation
                 now = datetime.now(ZoneInfo('Asia/Kolkata'))
                 start_time = self.current_session['start_time']
-                duration = now - start_time
+                total_duration = now - start_time
+                paused_total = self.current_session.get('total_paused_duration', timedelta(0))
+                # If paused, include current paused span in paused_total for display
+                if self.current_session.get('paused') and self.current_session.get('paused_start'):
+                    paused_total += (now - self.current_session['paused_start'])
+                active_duration = total_duration - paused_total
+                if active_duration.total_seconds() < 0:
+                    active_duration = timedelta(0)
+                effective_elapsed_seconds = int(active_duration.total_seconds())
                 return {
                     'id': self.current_session['id'],
                     'project': self.current_session['project'],
                     'goal': self.current_session['goal'],
                     'type': self.current_session['type'],
                     'start_time': start_time.strftime('%H:%M:%S'),
-                    'duration_minutes': round(duration.total_seconds() / 60, 1),
+                    'duration_minutes': round(active_duration.total_seconds() / 60, 1),
+                    'start_epoch': int(start_time.timestamp()),
+                    'paused': bool(self.current_session.get('paused', False)),
+                    'effective_elapsed': effective_elapsed_seconds,
                     'status': 'running'
                 }
         return None
@@ -398,15 +414,8 @@ class SessionManager:
             return []
     
     def start_monitoring(self):
-        """Start the session manager and screen monitoring"""
-        if not self.running:
-            self.running = True
-            self.screen_monitor_thread = threading.Thread(target=self._monitor_screen_lock, daemon=True)
-            self.screen_monitor_thread.start()
-            
-            # Start auto session if screen is unlocked
-            if not self._detect_screen_lock():
-                self._on_screen_unlocked()
+        """Screen lock monitoring disabled (no-op)"""
+        return
     
     def add_vertical(self, name: str) -> bool:
         """Add a new vertical/project"""

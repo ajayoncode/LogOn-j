@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 import re
 from pathlib import Path
 from session_manager import session_manager
+from streamlit.components.v1 import html
+from string import Template
 
 # Try to import plotly, but make it optional
 try:
@@ -18,7 +20,7 @@ except ImportError:
 
 # Page configuration
 st.set_page_config(
-    page_title="LogOn Dashboard",
+    page_title="LogOn",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -65,6 +67,15 @@ st.markdown("""
     .dataframe td:nth-child(5) {
         text-align: left !important;
     }
+    /* Consistent info-like box for custom fields */
+    .info-box {
+        background-color: #1f2d3d; /* dark blue similar to st.info */
+        color: #d1e3f8;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0 0.5rem 0;
+    }
+    .info-box strong { color: #69aaf0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,14 +98,75 @@ def create_session_controls():
     with col1:
         st.markdown("**Current Session Status**")
         if current_session:
-            session_type_icon = "🤖" if current_session['type'] == 'auto' else "👤"
-            st.success(f"{session_type_icon} {current_session['type'].title()} Session Active")
+            st.success(f"👤 {current_session['type'].title()} Session Active")
             st.info(f"**Project:** {current_session['project']}")
             st.info(f"**Goal:** {current_session['goal']}")
-            st.info(f"**Duration:** {current_session['duration_minutes']} minutes")
             st.info(f"**Started:** {current_session['start_time']}")
+
+            # Duration in the same UI style as others, with live-updatable span
+            now_seconds = int(datetime.now(ZoneInfo('Asia/Kolkata')).timestamp())
+            elapsed = max(0, now_seconds - int(current_session.get('start_epoch', 0)))
+            mm = str(elapsed // 60).zfill(2)
+            ss = str(elapsed % 60).zfill(2)
+            st.markdown(f"**Duration:** <span id=\"duration-display\">{mm}:{ss}</span>", unsafe_allow_html=True)
+            start_epoch = int(current_session.get('start_epoch', 0))
+            paused_flag = 1 if bool(current_session.get('paused', False)) else 0
+            effective_elapsed = int(current_session.get('effective_elapsed', 0))
+            script = Template(
+                """
+                <script>
+                (function() {
+                  const startEpoch = $start_epoch;
+                  const baseTitle = 'LogOn ';
+                  const pausedInit = $paused_flag === 1;
+                  const effectiveInit = $effective_elapsed; // seconds
+                  // Derive a base epoch for effective elapsed time when running
+                  let baseEffectiveEpoch = Math.floor(Date.now()/1000) - effectiveInit;
+                  // Persist pause state across script reloads
+                  try { window.parent.__logonPaused = pausedInit; } catch(e){}
+                  try { window.parent.__logonEffective = effectiveInit; } catch(e){}
+                  function fmtSeconds(totalSeconds){
+                    const mm = String(Math.floor(totalSeconds/60)).padStart(2,'0');
+                    const ss = String(totalSeconds%60).padStart(2,'0');
+                    return mm + ':' + ss;
+                  }
+                  function tick(){
+                    if(!startEpoch) return;
+                    const isPaused = !!(window.parent && window.parent.__logonPaused);
+                    let sec;
+                    if (isPaused) {
+                      sec = (window.parent && typeof window.parent.__logonEffective === 'number') ? window.parent.__logonEffective : effectiveInit;
+                    } else {
+                      const now = Math.floor(Date.now()/1000);
+                      sec = Math.max(0, now - baseEffectiveEpoch);
+                      try { window.parent.__logonEffective = sec; } catch(e){}
+                    }
+                    const text = fmtSeconds(sec);
+                    const el = window.parent.document.getElementById('duration-display');
+                    if (el) { el.textContent = text; }
+                    try { window.parent.document.title = '⏱ ' + text + ' - ' + baseTitle; } catch(e){}
+                  }
+                  tick();
+                  if(!window.parent.__logonTimer){ window.parent.__logonTimer = setInterval(tick, 1000); }
+                })();
+                </script>
+                """
+            ).substitute(start_epoch=start_epoch, paused_flag=paused_flag, effective_elapsed=effective_elapsed)
+            html(script, height=0)
         else:
             st.warning("No active session")
+            # Reset tab title when no session
+            html(
+                """
+                <script>
+                (function(){
+                  try { if (window.parent.__logonTimer) { clearInterval(window.parent.__logonTimer); window.parent.__logonTimer = null; } } catch(e){}
+                  try { window.parent.document.title = 'LogOn Dashboard'; } catch(e){}
+                })();
+                </script>
+                """,
+                height=0,
+            )
     
     with col2:
         st.markdown("**Manual Session Controls**")
@@ -118,25 +190,30 @@ def create_session_controls():
         st.markdown("**Session Actions**")
         
         if current_session:
-            if current_session['type'] == 'auto':
-                if st.button("⏹️ Stop Auto Session"):
-                    if session_manager.stop_auto_session():
-                        st.success("Auto session stopped!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to stop auto session")
-            else:
-                if st.button("⏹️ Stop Manual Session"):
+            is_paused = bool(current_session.get('paused', False))
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if not is_paused:
+                    if st.button("⏸️ Pause"):
+                        if session_manager.pause_session():
+                            st.success("Session paused")
+                            st.rerun()
+                        else:
+                            st.error("Failed to pause session")
+                else:
+                    if st.button("▶️ Resume"):
+                        if session_manager.resume_session():
+                            st.success("Session resumed")
+                            st.rerun()
+                        else:
+                            st.error("Failed to resume session")
+            with col_b:
+                if st.button("⏹️ Stop"):
                     if session_manager.stop_current_session():
-                        st.success("Manual session stopped!")
+                        st.success("Session stopped")
                         st.rerun()
                     else:
-                        st.error("Failed to stop manual session")
-        else:
-            if st.button("🤖 Start Auto Session"):
-                session_manager._start_auto_session()
-                st.success("Auto session started!")
-                st.rerun()
+                        st.error("Failed to stop session")
 
 def create_daily_hours_graph(df):
     """Create a line graph showing daily total hours"""
@@ -278,7 +355,7 @@ def load_session_data_from_csv():
 
 def main():
     # Header
-    st.markdown('<h1 class="main-header">📊 LogOn Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">Logon</h1>', unsafe_allow_html=True)
     
     # Session Controls
     create_session_controls()
@@ -288,17 +365,6 @@ def main():
     
     df = load_session_data_from_csv()
     
-    # Debug information
-    if not df.empty:
-        with st.expander("🔍 Debug Information", expanded=False):
-            st.write(f"Total sessions loaded: {len(df)}")
-            st.write(f"Session types: {df['session_type'].unique()}")
-            st.write(f"Auto sessions count: {len(df[df['session_type'] == 'auto'])}")
-            st.write(f"Manual sessions count: {len(df[df['session_type'] == 'manual'])}")
-            if len(df[df['session_type'] == 'auto']) > 0:
-                st.write("Sample auto sessions:")
-                auto_sessions = df[df['session_type'] == 'auto'][['session_id', 'project', 'goal', 'session_type', 'status', 'start_time']].head()
-                st.dataframe(auto_sessions)
     
     if not df.empty:
         # Use the loaded dataframe directly (it now contains both original and display columns)
