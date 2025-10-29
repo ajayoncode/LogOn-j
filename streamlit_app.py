@@ -147,7 +147,9 @@ def create_session_controls():
                     try { window.parent.document.title = '⏱ ' + text + ' - ' + baseTitle; } catch(e){}
                   }
                   tick();
-                  if(!window.parent.__logonTimer){ window.parent.__logonTimer = setInterval(tick, 1000); }
+                  // Always reset the timer on re-render to avoid stale closures
+                  try { if (window.parent.__logonTimer) { clearInterval(window.parent.__logonTimer); } } catch(e){}
+                  window.parent.__logonTimer = setInterval(tick, 1000);
                 })();
                 </script>
                 """

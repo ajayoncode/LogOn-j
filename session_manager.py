@@ -41,6 +41,17 @@ class SessionManager:
             # This is expected when running in Streamlit or other contexts
             pass
     
+    def _fmt_dt(self, dt: Optional[datetime]) -> str:
+        """Format datetime as ISO without microseconds and without timezone offset, in IST."""
+        if dt is None:
+            return ''
+        if dt.tzinfo is None:
+            # Assume naive is already local time; just drop microseconds
+            return dt.replace(microsecond=0).isoformat()
+        # Convert to IST, strip tzinfo
+        ist = dt.astimezone(ZoneInfo('Asia/Kolkata')).replace(microsecond=0)
+        return ist.replace(tzinfo=None).isoformat()
+    
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
         self.stop_all_sessions()
@@ -182,12 +193,12 @@ class SessionManager:
     def _start_session(self, project: str, goal: str, session_type: str) -> bool:
         """Start a new session"""
         session_id = self._generate_session_id()
-        # Use timezone-aware IST timestamps
-        start_time = datetime.now()
+        # Use timezone-aware IST timestamps for both memory and CSV
+        start_time = datetime.now(ZoneInfo('Asia/Kolkata'))
         
         self.current_session = {
             'id': session_id,
-            'start_time': datetime.now(ZoneInfo('Asia/Kolkata')),
+            'start_time': start_time,
             'project': project,
             'goal': goal,
             'type': session_type,
@@ -231,7 +242,6 @@ class SessionManager:
             self.current_session['timeout_thread'].cancel()
         
         # Calculate duration excluding paused time
-        test=datetime.now()
         end_time = datetime.now(ZoneInfo('Asia/Kolkata'))
         total_duration = end_time - self.current_session['start_time']
         paused_total = self.current_session.get('total_paused_duration', timedelta(0))
@@ -246,7 +256,7 @@ class SessionManager:
         # Update CSV
         self._update_session_in_csv(
             self.current_session['id'],
-            test,
+            end_time,
             duration_minutes,
             'closed',
             reason == "Manual session timeout (20 minutes)"
@@ -346,14 +356,8 @@ class SessionManager:
             with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 # Enforce ISO format with timezone info in seconds precision
-                start_str = (
-                    start_time.replace(microsecond=0).isoformat()
-                    if isinstance(start_time, datetime) else str(start_time)
-                )
-                end_str = (
-                    end_time.replace(microsecond=0).isoformat()
-                    if isinstance(end_time, datetime) and end_time is not None else ''
-                )
+                start_str = self._fmt_dt(start_time) if isinstance(start_time, datetime) else str(start_time)
+                end_str = self._fmt_dt(end_time) if isinstance(end_time, datetime) else ''
                 writer.writerow([
                     session_id,
                     start_str,
@@ -372,29 +376,46 @@ class SessionManager:
                              duration_minutes: float, status: str, auto_closed: bool):
         """Update existing session in CSV"""
         try:
-            # Read all rows
-            rows = []
+            # Read all rows as dicts
             with open(self.csv_file, 'r', newline='', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-            
-            # Update the matching row
-            for i, row in enumerate(rows):
-                if i == 0:  # Skip header
-                    continue
-                if row[0] == session_id:  # session_id is first column
-                    # Enforce ISO format with timezone info in seconds precision
-                    rows[i][2] = end_time.replace(microsecond=0).isoformat()  # end_time
-                    rows[i][3] = round(duration_minutes, 2)  # duration_minutes
-                    rows[i][7] = status  # status
-                    rows[i][8] = auto_closed  # auto_closed
+                dict_reader = csv.DictReader(f)
+                fieldnames = dict_reader.fieldnames or [
+                    'session_id', 'start_time', 'end_time', 'duration_minutes', 
+                    'project', 'goal', 'session_type', 'status', 'auto_closed'
+                ]
+                rows = list(dict_reader)
+
+            # Update the matching row by session_id (trimmed)
+            target_id = str(session_id).strip()
+            iso_end = self._fmt_dt(end_time)
+            updated = False
+            for row in rows:
+                if str(row.get('session_id', '')).strip() == target_id:
+                    row['end_time'] = iso_end
+                    row['duration_minutes'] = str(round(duration_minutes, 2))
+                    row['status'] = status
+                    # Store auto_closed as literal True/False (not stringified boolean text accidentally)
+                    row['auto_closed'] = True if auto_closed else False
+                    updated = True
                     break
-            
-            # Write back to file
+
+            # Write back to file via DictWriter to preserve headers and order
             with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerows(rows)
-                
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                # Ensure auto_closed is written as a boolean-compatible value
+                for r in rows:
+                    # Normalize types
+                    if isinstance(r.get('duration_minutes'), float):
+                        r['duration_minutes'] = str(round(r['duration_minutes'], 2))
+                    # Ensure auto_closed is either True/False or 'True'/'False'
+                    ac = r.get('auto_closed')
+                    if isinstance(ac, str):
+                        r['auto_closed'] = True if ac.lower() == 'true' else False
+                    writer.writerow(r)
+
+            if not updated:
+                print(f"Warning: session_id not found for update: {session_id}")
         except Exception as e:
             print(f"Error updating CSV: {e}")
     
