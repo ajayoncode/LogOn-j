@@ -19,7 +19,7 @@ class SessionManager:
         self.csv_file = str((base_dir / "logger_data" / "sessions.csv").resolve())
         self.verticals_file = str((base_dir / "verticals.json").resolve())
         # Auto session removed; manual sessions only
-        self.manual_timeout = 20 * 60  # 20 minutes
+        self.manual_timeout = 60 * 60  # 20 minutes
         self.running = False
         self.screen_monitor_thread = None
         
@@ -230,7 +230,7 @@ class SessionManager:
         """Callback for manual session timeout"""
         with self.session_lock:
             if self.current_session and self.current_session['type'] == 'manual':
-                self._end_current_session("Manual session timeout (20 minutes)")
+                self._end_current_session("Manual session timeout (60 minutes)")
     
     def _end_current_session(self, reason: str = "Manual stop"):
         """End the current session"""
@@ -259,7 +259,7 @@ class SessionManager:
             end_time,
             duration_minutes,
             'closed',
-            reason == "Manual session timeout (20 minutes)"
+            reason == "Manual session timeout (60 minutes)"
         )
         
         self.current_session = None

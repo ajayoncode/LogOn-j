@@ -15,7 +15,7 @@ import select
 
 VERTICALS_FILE = 'verticals.json'
 LOGGER_DIR = 'logger_data'
-AUTO_END_SECONDS = 20*60  # 20 minutes
+AUTO_END_SECONDS = 60*60  # 20 minutes
 
 console = Console()
 
@@ -136,8 +136,8 @@ def timer_loop(vertical, goal, start_time):
                     write_log(vertical, f"[LogOn - {time_str}] in progress")
                 # Auto end after 20 minutes
                 if elapsed >= AUTO_END_SECONDS:
-                    write_log(vertical, f"[LogOn - {time_str}] auto-closed after 20 minutes")
-                    print(f"\n[cyan]Session auto-closed at {time_str} (20 minutes reached).[/]")
+                    write_log(vertical, f"[LogOn - {time_str}] auto-closed after 60 minutes")
+                    print(f"\n[cyan]Session auto-closed at {time_str} (60 minutes reached).[/]")
                     play_mp3("/home/ajay-dev/Documents/HangOn/LogOn/beep.mp3")
                     break
                 last_logged_second = elapsed
