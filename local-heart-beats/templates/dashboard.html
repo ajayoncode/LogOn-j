@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Code Heartbeats{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>📊 Real-Time Dashboard</h1>
+    <div class="last-updated">
+        <span id="last-update-time">Loading...</span>
+        <span class="auto-refresh-badge">🔄 Auto-refresh: 10s</span>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid" id="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">⏱️</div>
+        <div class="stat-info">
+            <div class="stat-value" id="total-duration">-</div>
+            <div class="stat-label">Total Coding Time</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📅</div>
+        <div class="stat-info">
+            <div class="stat-value" id="total-days">-</div>
+            <div class="stat-label">Active Days</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📁</div>
+        <div class="stat-info">
+            <div class="stat-value" id="total-projects">-</div>
+            <div class="stat-label">Projects</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-info">
+            <div class="stat-value" id="avg-daily">-</div>
+            <div class="stat-label">Avg Daily Time</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="charts-row">
+    <div class="chart-container">
+        <h3>📈 Daily Activity</h3>
+        <canvas id="daily-chart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3>🕐 Hourly Activity</h3>
+        <canvas id="hourly-chart"></canvas>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="charts-row">
+    <div class="chart-container">
+        <h3>📅 Day of Week Analysis</h3>
+        <canvas id="day-of-week-chart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3>🏆 Top Projects (by duration)</h3>
+        <canvas id="projects-chart"></canvas>
+    </div>
+</div>
+
+<!-- Charts Row 3 -->
+<div class="charts-row">
+    <div class="chart-container">
+        <h3>📈 Cumulative Time Worked</h3>
+        <canvas id="cumulative-chart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3>⏰ Daily Working Hours & Productivity</h3>
+        <canvas id="working-hours-chart"></canvas>
+    </div>
+</div>
+
+<!-- Charts Row 4 -->
+<div class="charts-row">
+    <div class="chart-container full-width">
+        <h3>📊 Project Activity Over Time (Daily Breakdown)</h3>
+        <canvas id="daily-projects-chart"></canvas>
+    </div>
+</div>
+
+<!-- Recent Coding Sessions Table -->
+<div class="table-container">
+    <h3>⌨️ Recent Coding Sessions</h3>
+    <div class="table-wrapper">
+        <table class="data-table" id="recent-events-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>File</th>
+                    <th>Language</th>
+                    <th>Project</th>
+                    <th>Duration</th>
+                    <th>Branch</th>
+                </tr>
+            </thead>
+            <tbody id="recent-events-tbody">
+                <tr>
+                    <td colspan="6" class="loading-text">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
+

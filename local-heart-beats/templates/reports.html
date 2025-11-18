@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Code Heartbeats{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="reports-header">
+    <h1>📊 Reports & Analytics</h1>
+    <div class="report-filters">
+        <select id="report-type" class="filter-select">
+            <option value="daily">Daily Reports</option>
+            <option value="monthly">Monthly Reports</option>
+            <option value="projects">Project Reports</option>
+        </select>
+        
+        <div id="date-filters" class="filter-group">
+            <input type="date" id="start-date" class="filter-input">
+            <span>to</span>
+            <input type="date" id="end-date" class="filter-input">
+        </div>
+        
+        <select id="project-filter" class="filter-select" style="display: none;">
+            <option value="">All Projects</option>
+        </select>
+        
+        <button id="apply-filters" class="filter-btn">Apply Filters</button>
+        <button id="reset-filters" class="filter-btn secondary">Reset</button>
+    </div>
+</div>
+
+<!-- Report Summary Cards -->
+<div class="report-summary" id="report-summary"></div>
+
+<!-- Charts Section -->
+<div class="reports-charts">
+    <div class="report-chart-container">
+        <h3 id="report-chart-title">Daily Activity</h3>
+        <canvas id="report-chart"></canvas>
+    </div>
+    
+    <div class="report-chart-container">
+        <h3>Distribution Chart</h3>
+        <canvas id="report-distribution-chart"></canvas>
+    </div>
+</div>
+
+<!-- Data Table -->
+<div class="table-container">
+    <h3 id="table-title">Report Data</h3>
+    <div class="table-wrapper">
+        <table class="data-table" id="report-table">
+            <thead id="report-table-head">
+                <tr>
+                    <th>Loading...</th>
+                </tr>
+            </thead>
+            <tbody id="report-table-body">
+                <tr>
+                    <td colspan="10" class="loading-text">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+{% endblock %}
+
